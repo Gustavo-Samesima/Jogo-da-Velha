@@ -1,98 +1,90 @@
-let boardSize = 3;
-let board = [];
-let currentPlayer = "X";
-let gameActive = true;
-let playAgainstComputer = false;
+let board, currentPlayer, gameActive, playAgainstComputer, difficulty;
+const boardSize = 3;
 
-function startGame(size, againstComputer) {
-  boardSize = size;
+function startGame(againstComputer, diff = 'easy') {
   playAgainstComputer = againstComputer;
-  board = Array.from({ length: boardSize }, () => Array(boardSize).fill(""));
+  difficulty = diff;
   currentPlayer = "X";
   gameActive = true;
-  document.getElementById("status").textContent = `Jogador Atual: ${currentPlayer}`;
+  board = Array.from({ length: boardSize }, () => Array(boardSize).fill(""));
+  updateStatus();
   renderBoard();
 }
 
 function renderBoard() {
   const gameBoard = document.getElementById("game-board");
-  gameBoard.innerHTML = "";
-  gameBoard.style.gridTemplateColumns = `repeat(${boardSize}, 60px)`;
-
-  for (let row = 0; row < boardSize; row++) {
-    for (let col = 0; col < boardSize; col++) {
-      const cell = document.createElement("div");
-      cell.classList.add("cell");
-      cell.textContent = board[row][col];
-      cell.addEventListener("click", () => handleMove(row, col));
-      gameBoard.appendChild(cell);
-    }
-  }
+  gameBoard.innerHTML = '';
+  gameBoard.style.gridTemplateColumns = `repeat(${boardSize}, 1fr)`;
+  board.forEach((row, i) => row.forEach((cell, j) => {
+    const cellElement = document.createElement("div");
+    cellElement.classList.add("cell");
+    cellElement.textContent = cell;
+    cellElement.onclick = () => handleMove(i, j);
+    gameBoard.appendChild(cellElement);
+  }));
 }
 
 function handleMove(row, col) {
-  if (board[row][col] !== "" || !gameActive) return;
-
+  if (!gameActive || board[row][col]) return;
   board[row][col] = currentPlayer;
   renderBoard();
 
-  if (checkWin()) {
-    document.getElementById("status").textContent = `Jogador ${currentPlayer} venceu!`;
-    gameActive = false;
-  } else if (board.flat().every(cell => cell !== "")) {
-    document.getElementById("status").textContent = "Empate!";
-    gameActive = false;
-  } else {
-    currentPlayer = currentPlayer === "X" ? "O" : "X";
-    document.getElementById("status").textContent = `Jogador Atual: ${currentPlayer}`;
+  if (checkWin()) return endGame(`${currentPlayer} venceu!`);
+  if (board.flat().every(cell => cell)) return endGame("Empate!");
 
-    if (playAgainstComputer && currentPlayer === "O" && gameActive) {
-      playAgainstBot();
-    }
-  }
+  currentPlayer = currentPlayer === "X" ? "O" : "X";
+  updateStatus();
+
+  if (playAgainstComputer && currentPlayer === "O") setTimeout(playAgainstBot, 500);
 }
 
 function playAgainstBot() {
-  // O computador faz uma jogada aleatória em uma célula vazia
-  const emptyCells = [];
-  for (let row = 0; row < boardSize; row++) {
-    for (let col = 0; col < boardSize; col++) {
-      if (board[row][col] === "") {
-        emptyCells.push({ row, col });
+  const move = (difficulty === 'easy') ? getRandomMove() : getBestMove();
+  if (move) handleMove(move.row, move.col);
+}
+
+function getRandomMove() {
+  const emptyCells = board.flatMap((row, i) => row.map((cell, j) => !cell ? { row: i, col: j } : null)).filter(Boolean);
+  return emptyCells[Math.floor(Math.random() * emptyCells.length)];
+}
+
+function getBestMove() {
+  return winningMove("O") || winningMove("X") || getRandomMove();
+}
+
+function winningMove(player) {
+  for (let i = 0; i < boardSize; i++) {
+    for (let j = 0; j < boardSize; j++) {
+      if (!board[i][j]) {
+        board[i][j] = player;
+        const isWin = checkWin();
+        board[i][j] = "";
+        if (isWin) return { row: i, col: j };
       }
     }
   }
-
-  if (emptyCells.length > 0) {
-    const randomCell = emptyCells[Math.floor(Math.random() * emptyCells.length)];
-    handleMove(randomCell.row, randomCell.col);
-  }
+  return null;
 }
 
 function checkWin() {
-  const winSequence = Array(boardSize).fill(currentPlayer).join("");
+  const lines = [
+    ...board, 
+    ...board[0].map((_, i) => board.map(row => row[i])),
+    board.map((_, i) => board[i][i]), 
+    board.map((_, i) => board[i][boardSize - i - 1])
+  ];
+  return lines.some(line => line.every(cell => cell === currentPlayer));
+}
 
-  for (let i = 0; i < boardSize; i++) {
-    if (board[i].join("") === winSequence || board.map(row => row[i]).join("") === winSequence) {
-      return true;
-    }
-  }
+function updateStatus() {
+  document.getElementById("status").textContent = `Jogador Atual: ${currentPlayer}`;
+}
 
-  const mainDiagonal = board.map((row, idx) => row[idx]).join("");
-  const antiDiagonal = board.map((row, idx) => row[boardSize - 1 - idx]).join("");
-
-  return mainDiagonal === winSequence || antiDiagonal === winSequence;
+function endGame(message) {
+  document.getElementById("status").textContent = message;
+  gameActive = false;
 }
 
 function showRules() {
-  alert(
-    `Regras do Jogo da Velha:\n\n` +
-    `Modo 3x3 e 5x5:\n` +
-    `- Dois jogadores se alternam para marcar "X" e "O" nas células.\n` +
-    `- O primeiro jogador a alinhar uma sequência de símbolos (horizontal, vertical ou diagonal) vence.\n\n` +
-    `Modo Contra o Computador:\n` +
-    `- Você joga como "X" e o computador joga como "O".\n` +
-    `- O computador fará jogadas aleatórias em células vazias.\n\n` +
-    `Boa sorte!`
-  );
+  alert(`Regras do Jogo da Velha\n\nObjetivo: Alinhar símbolos na horizontal, vertical ou diagonal.\nModos:\n- Multiplayer: Dois jogadores alternam jogadas.\n- Contra o Computador: Fácil (joga aleatoriamente), Difícil (tenta bloquear ou vencer).\nPasso a Passo:\n1. Escolha o modo.\n2. Clique para jogar.\n3. O bot joga automaticamente no modo contra o computador.`);
 }
